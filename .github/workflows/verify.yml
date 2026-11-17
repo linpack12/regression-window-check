@@ -6,7 +6,7 @@ permissions:
 jobs:
   diagnose:
     name: Diagnose interval
-    environment: operator-approval
+    if: github.ref == 'refs/heads/main' && github.actor == github.repository_owner && github.triggering_actor == github.repository_owner
     runs-on: ubuntu-24.04
     timeout-minutes: 4
     outputs:
