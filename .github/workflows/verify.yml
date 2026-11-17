@@ -1,0 +1,49 @@
+name: Interval regression
+on: workflow_dispatch
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    name: Diagnose interval
+    environment: operator-approval
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    outputs:
+      culprit: ${{ steps.verify.outputs.culprit }}
+      revision: ${{ steps.verify.outputs.revision }}
+      tests: ${{ steps.verify.outputs.tests }}
+    steps:
+      - name: Check out fixture
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Reproduce boundary regression
+        run: python3 -I -B probe.py > "$RUNNER_TEMP/report.json"
+      - name: Verify corrected revision
+        id: verify
+        shell: python
+        run: |
+          import json
+          import os
+          from pathlib import Path
+
+          report = json.loads((Path(os.environ["RUNNER_TEMP"]) / "report.json").read_text())
+          expected = {
+              "culprit": "f569dcbe59a2fdf68fb6f64a7caff592b716f1bc",
+              "revision": "fda53f609ba573b7a5221380d092110b15cd3f39",
+              "tests": 5,
+          }
+          if report["verified"] is not True or any(report[k] != v for k, v in expected.items()):
+              raise SystemExit("Unexpected regression evidence")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              for key in expected:
+                  print(f"{key}={report[key]}", file=out)
+  evidence:
+    needs: diagnose
+    name: Evidence ${{ needs.diagnose.outputs.culprit }} ${{ needs.diagnose.outputs.revision }} ${{ needs.diagnose.outputs.tests }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 1
+    steps:
+      - name: Record verification
+        run: echo "Interval fixture verified."
